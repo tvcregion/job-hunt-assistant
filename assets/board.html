@@ -1,0 +1,361 @@
+<title>Job Hunt Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: a hiring pipeline read left to right — what needs the candidate first, then queue, sent, replies, interviews, offers, rejections.
+   Everything shown comes from the artifact's db: apps/<id>, meta/config, meta/status, meta/log. */
+:root {
+  --bg: #f2f4f3; --surface: #ffffff; --surface-2: #e7ecea; --fg: #16201c; --muted: #5a6964; --line: #d3dcd8;
+  --accent: #0b6e5f; --st-wait: #b2560c; --st-queue: #66746f; --st-applied: #2c5ea8; --st-reply: #7748b3;
+  --st-interview: #0b6e5f; --st-offer: #1c8a3a; --st-reject: #a63b3b; --soon: #b2380c;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1412; --surface: #151d1a; --surface-2: #1c2622; --fg: #e3eae7; --muted: #93a39d; --line: #29352f;
+    --accent: #3cbca3; --st-wait: #f0a050; --st-queue: #93a39d; --st-applied: #7aa6ec; --st-reply: #b593ec;
+    --st-interview: #3cbca3; --st-offer: #5fcf7c; --st-reject: #ec8a8a; --soon: #f08a5d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1412; --surface: #151d1a; --surface-2: #1c2622; --fg: #e3eae7; --muted: #93a39d; --line: #29352f;
+  --accent: #3cbca3; --st-wait: #f0a050; --st-queue: #93a39d; --st-applied: #7aa6ec; --st-reply: #b593ec;
+  --st-interview: #3cbca3; --st-offer: #5fcf7c; --st-reject: #ec8a8a; --soon: #f08a5d; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.45; }
+.jb { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 40px; max-width: 1680px; margin: 0 auto; display: grid; gap: 20px; }
+.jb-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.jb-head h1 { font-family: var(--font-display); font-size: 28px; line-height: 1.1; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.jb-sub { color: var(--muted); margin: 6px 0 0; max-width: 62ch; }
+.jb-check { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; display: grid; gap: 2px; min-width: 0; }
+.jb-check strong { color: var(--fg); font-weight: 500; }
+.jb-check .jb-summary { font-family: var(--font-body); font-size: 13px; color: var(--fg); max-width: 52ch; }
+.jb-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.jb-stat { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.jb-stat b { font-family: var(--font-display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.jb-stat span { color: var(--muted); font-size: 12px; }
+.jb-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: center; }
+.jb-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.jb-chipbtn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.jb-chipbtn[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.jb-chipbtn:focus-visible, .jb-card a:focus-visible, .jb-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.jb-board-wrap { overflow-x: auto; padding-bottom: 6px; }
+.jb-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: 12px; align-items: start; min-width: min-content; }
+.jb-col { background: var(--surface-2); border-radius: 10px; padding: 10px; display: grid; gap: 8px; min-width: 0; }
+.jb-colhead { display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px; }
+.jb-colhead h2 { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin: 0; }
+.jb-colhead .jb-count { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.jb-colhint { font-size: 12px; color: var(--muted); padding: 0 4px; margin-top: -6px; }
+.jb-empty { font-size: 12px; color: var(--muted); padding: 10px 4px; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
+.jb-card { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--stc, var(--line)); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; min-width: 0; }
+.jb-card-top { display: flex; align-items: baseline; gap: 8px; }
+.jb-company { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.jb-fit { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; letter-spacing: 1px; }
+.jb-role { font-size: 13px; overflow-wrap: anywhere; }
+.jb-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.jb-tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.jb-dates { font-family: var(--font-mono); font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.jb-dates .soon { color: var(--soon); font-weight: 500; }
+.jb-event { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.jb-next { font-size: 12px; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--st-wait) 12%, transparent); color: var(--fg); overflow-wrap: anywhere; }
+.jb-next b { color: var(--st-wait); font-weight: 600; }
+.jb-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; }
+.jb-links a { color: var(--accent); text-decoration: none; }
+.jb-links a:hover { text-decoration: underline; }
+.jb-copy { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer; margin-left: auto; }
+.jb-send { font: inherit; font-size: 12px; font-weight: 600; color: var(--surface); background: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 12px; cursor: pointer; margin-left: auto; }
+.jb-send.ghost { background: none; color: var(--fg); border-color: var(--line); font-weight: 500; }
+.jb-send:disabled { opacity: .55; cursor: default; }
+.jb-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.jb-confirm { display: grid; gap: 6px; padding: 8px; border-radius: 6px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 12px; }
+.jb-confirm .row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.jb-req { font-size: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--accent); }
+.jb-req.blocked { color: var(--st-wait); }
+.jb-req button { font: inherit; font-size: 11px; color: var(--muted); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; }
+.jb-log { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; }
+.jb-log h2 { font-family: var(--font-display); font-size: 16px; margin: 0; }
+.jb-log ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.jb-log li { display: grid; grid-template-columns: 9.5em 1fr; gap: 10px; font-size: 13px; min-width: 0; }
+.jb-log time { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.jb-log li span { min-width: 0; overflow-wrap: anywhere; }
+.jb-state { color: var(--muted); padding: 24px 0; }
+@media (max-width: 720px) {
+  .jb-board { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: 1fr; min-width: 0; }
+  .jb-check { text-align: left; }
+  .jb-log li { grid-template-columns: 1fr; gap: 0; }
+}
+</style>
+
+<div class="jb">
+  <header class="jb-head">
+    <div>
+      <h1 id="jb-title">Job hunt</h1>
+      <p class="jb-sub" id="jb-sub"></p>
+    </div>
+    <div class="jb-check">
+      <span><span id="jb-lastlabel">Mail checked:</span> <strong id="jb-last">—</strong></span>
+      <span id="jb-nextcheck"></span>
+      <span class="jb-summary" id="jb-summary"></span>
+    </div>
+  </header>
+  <section class="jb-stats" id="jb-stats" aria-label="Summary"></section>
+  <nav class="jb-filters" id="jb-filters" aria-label="Filter"></nav>
+  <div class="jb-board-wrap"><div class="jb-board" id="jb-board"><p class="jb-state" id="jb-state">Loading applications…</p></div></div>
+  <section class="jb-log" aria-labelledby="jb-log-title">
+    <h2 id="jb-log-title">Log</h2>
+    <ol id="jb-log"></ol>
+    <p class="jb-empty" id="jb-log-empty">Employer replies and status changes will appear here.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  // Defaults in English. meta/config overrides any of them, so the board speaks the candidate's language.
+  const DEFAULTS = {
+    title: "Job hunt", subtitle: "", locale: "en-GB",
+    statuses: {
+      waiting_you: { label: "Needs you", hint: "your answer or action is needed" },
+      queue: { label: "Ready to send", hint: "letter ready, waiting for your go" },
+      applied: { label: "Sent", hint: "waiting for a reply" },
+      in_review: { label: "Replied", hint: "a recruiter is in touch" },
+      interview: { label: "Interview", hint: "" },
+      offer: { label: "Offer", hint: "" },
+      rejected: { label: "Rejected", hint: "" },
+    },
+    filters: [ { key: "all", label: "All" } ],
+    words: { last_check: "Mail checked:", never: "not yet", applied: "applied", until: "until", days: "d", updated: "updated",
+      next: "Next: ", posting: "Posting ↗", mail: "Email ↗", empty: "empty", log: "Log",
+      log_empty: "Employer replies and status changes will appear here.", loading: "Loading applications…",
+      no_apps: "No applications yet. The board fills itself as soon as they are added.",
+      no_db: "The applications database is not available in this view. Open the page on claude.ai while signed in.",
+      load_error: "Could not load the applications. Reload the page.", copy: "Copy command", copied: "Copied",
+      copy_cmd: "Send the application: {company} — {role}", just_now: "just now", min_ago: "min ago", h_ago: "h ago", d_ago: "d ago",
+      send: "Send", send_confirm: "Yes, send", cancel: "Cancel", send_what: "This goes out:",
+      send_default: "your CV and the cover letter prepared for this job",
+      req_requested: "Sending requested — the assistant sends it on its next run, or right away if you say so in the chat.",
+      req_sending: "Sending now…", req_blocked: "Sending stopped — see Next.", req_done: "Sent.",
+      cancel_request: "Cancel request", send_error: "The request was not saved. Reload the page and try again." },
+    channel_labels: { email: "Email", linkedin: "LinkedIn", lever: "Lever", ashby: "Ashby", greenhouse: "Greenhouse",
+      workable: "Workable", teamtailor: "Teamtailor", breezy: "Breezy", smartrecruiters: "SmartRecruiters", workday: "Workday",
+      yc: "YC", djinni: "Djinni", agency: "Agency", ats: "Company site" },
+    cv_labels: {},
+  };
+  const ORDER = ["waiting_you", "queue", "applied", "in_review", "interview", "offer", "rejected"];
+  const COLORS = { waiting_you: "var(--st-wait)", queue: "var(--st-queue)", applied: "var(--st-applied)", in_review: "var(--st-reply)", interview: "var(--st-interview)", offer: "var(--st-offer)", rejected: "var(--st-reject)" };
+
+  let cfg = JSON.parse(JSON.stringify(DEFAULTS));
+  let apps = [];
+  // Send requests live in the viewer's own private subtree data/users/<id>/send-<appId>: only the person who
+  // clicked can write or read them, and the assistant (acting as the owner) reads data/users/me.
+  let db = null, uid = null, canSend = false, requests = {}, confirming = null;
+  let filter = "all";
+  try { filter = localStorage.getItem("jb-filter") || "all"; } catch (e) {}
+  let lastCheckIso = null;
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const W = (k) => (cfg.words && cfg.words[k] != null ? cfg.words[k] : DEFAULTS.words[k]);
+  function fmt(opts) { try { return new Intl.DateTimeFormat(cfg.locale || "en-GB", opts); } catch (e) { return new Intl.DateTimeFormat("en-GB", opts); } }
+  function parseDate(s) { if (!s) return null; const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + "T12:00:00" : s); return isNaN(d) ? null : d; }
+  function fmtD(s) { const d = parseDate(s); return d ? fmt({ day: "numeric", month: "short" }).format(d) : ""; }
+  function fmtDT(s) { const d = parseDate(s); return d ? fmt({ day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(d) : ""; }
+  function daysUntil(s) { const d = parseDate(s); return d ? Math.ceil((d - Date.now()) / 86400000) : null; }
+  function ago(s) {
+    const d = parseDate(s); if (!d) return "";
+    const m = Math.round((Date.now() - d) / 60000);
+    if (m < 1) return W("just_now"); if (m < 60) return m + " " + W("min_ago");
+    const h = Math.round(m / 60); if (h < 24) return h + " " + W("h_ago");
+    return Math.round(h / 24) + " " + W("d_ago");
+  }
+  function status(key) { const s = (cfg.statuses && cfg.statuses[key]) || DEFAULTS.statuses[key] || { label: key, hint: "" }; return Object.assign({ key, color: COLORS[key] || "var(--line)" }, s); }
+  function matches(a) {
+    const f = (cfg.filters || []).find((x) => x.key === filter);
+    if (!f || f.key === "all" || !f.field) return true;
+    return String(a[f.field]) === String(f.equals);
+  }
+
+  function renderShell() {
+    $("jb-title").textContent = cfg.title || DEFAULTS.title;
+    $("jb-sub").textContent = cfg.subtitle || "";
+    $("jb-lastlabel").textContent = W("last_check");
+    $("jb-log-title").textContent = W("log");
+    $("jb-log-empty").textContent = W("log_empty");
+    const st = $("jb-state"); if (st) st.textContent = W("loading");
+    renderFilters();
+  }
+
+  function renderFilters() {
+    const nav = $("jb-filters"); nav.replaceChildren();
+    const list = (cfg.filters && cfg.filters.length) ? cfg.filters : DEFAULTS.filters;
+    if (!list.some((f) => f.key === filter)) filter = "all";
+    if (list.length < 2) return;
+    for (const f of list) {
+      const b = el("button", "jb-chipbtn", f.label); b.type = "button"; b.id = "jb-filter-" + f.key;
+      b.setAttribute("aria-pressed", String(filter === f.key));
+      b.addEventListener("click", () => { filter = f.key; try { localStorage.setItem("jb-filter", filter); } catch (e) {} renderFilters(); renderBoard(); });
+      nav.append(b);
+    }
+  }
+
+  function copyCommand(btn, text) {
+    const done = () => { btn.textContent = W("copied"); setTimeout(() => { btn.textContent = W("copy"); }, 1500); };
+    try { navigator.clipboard.writeText(text).then(done, () => { btn.title = text; }); } catch (e) { btn.title = text; }
+  }
+
+  function card(a, st) {
+    const c = el("article", "jb-card"); c.id = "app-" + a._id; c.style.setProperty("--stc", st.color);
+    const top = el("div", "jb-card-top");
+    top.append(el("span", "jb-company", a.company || "—"));
+    if (a.fit) { const n = Math.max(0, Math.min(5, Number(a.fit) || 0)); top.append(el("span", "jb-fit", "●".repeat(n) + "○".repeat(5 - n))); }
+    c.append(top);
+    if (a.role) c.append(el("div", "jb-role", a.role));
+    const tags = el("div", "jb-tags");
+    const chan = a.channel_label || (cfg.channel_labels && cfg.channel_labels[a.channel]) || a.channel;
+    const cvl = a.cv_label || (cfg.cv_labels && cfg.cv_labels[a.cv]) || (a.cv ? "CV · " + a.cv : "");
+    for (const t of [a.location, chan, cvl]) if (t) tags.append(el("span", "jb-tag", String(t)));
+    if (tags.childElementCount) c.append(tags);
+    const dates = el("div", "jb-dates");
+    if (a.applied_at) dates.append(el("span", "", W("applied") + " " + fmtD(a.applied_at)));
+    if (a.deadline) { const left = daysUntil(a.deadline); dates.append(el("span", left != null && left <= 3 ? "soon" : "", W("until") + " " + fmtD(a.deadline) + (left != null && left >= 0 && left <= 7 ? " · " + left + " " + W("days") : ""))); }
+    if (a.last_update) dates.append(el("span", "", W("updated") + " " + fmtD(a.last_update)));
+    if (dates.childElementCount) c.append(dates);
+    if (a.last_event) c.append(el("div", "jb-event", a.last_event));
+    if (a.next_step) { const n = el("div", "jb-next"); n.append(el("b", "", W("next"))); n.append(document.createTextNode(a.next_step)); c.append(n); }
+    const links = el("div", "jb-links");
+    if (a.link && /^https:\/\//.test(a.link)) { const l = el("a", "", W("posting")); l.href = a.link; l.target = "_blank"; l.rel = "noopener"; links.append(l); }
+    if (a.mail_link && /^https:\/\/mail\.google\.com\//.test(a.mail_link)) { const l = el("a", "", W("mail")); l.href = a.mail_link; l.target = "_blank"; l.rel = "noopener"; links.append(l); }
+    const req = requests[a._id];
+    if (st.key === "queue" && canSend && !req) {
+      const b = el("button", "jb-send", W("send")); b.type = "button"; b.id = "send-" + a._id;
+      b.addEventListener("click", () => { confirming = a._id; renderBoard(); });
+      links.append(b);
+    } else if ((st.key === "queue" || st.key === "waiting_you") && !req) {
+      const cmd = W("copy_cmd").replace("{company}", a.company || "").replace("{role}", a.role || "");
+      const b = el("button", "jb-copy", W("copy")); b.type = "button"; b.title = cmd;
+      b.addEventListener("click", () => copyCommand(b, cmd));
+      links.append(b);
+    }
+    if (links.childElementCount) c.append(links);
+    if (confirming === a._id && !req) c.append(confirmPanel(a, chan, cvl));
+    if (req && req.state !== "done" && (st.key === "queue" || st.key === "waiting_you")) c.append(requestLine(a, req));
+    return c;
+  }
+
+  function confirmPanel(a, chan, cvl) {
+    const p = el("div", "jb-confirm");
+    p.append(el("div", "", W("send_what") + " " + (a.send_summary || [cvl, chan].filter(Boolean).join(" · ") || W("send_default"))));
+    const row = el("div", "row");
+    const no = el("button", "jb-send ghost", W("cancel")); no.type = "button";
+    no.addEventListener("click", () => { confirming = null; renderBoard(); });
+    const yes = el("button", "jb-send", W("send_confirm")); yes.type = "button";
+    yes.addEventListener("click", async () => {
+      yes.disabled = true; no.disabled = true;
+      try {
+        await db.collection("data/users/" + uid).doc("send-" + a._id).set({ app_id: a._id, requested_at: new Date().toISOString(), state: "requested" });
+        confirming = null;
+      } catch (e) { p.append(el("div", "", W("send_error"))); yes.disabled = false; no.disabled = false; return; }
+      renderBoard();
+    });
+    row.append(no, yes); p.append(row);
+    return p;
+  }
+
+  function requestLine(a, req) {
+    const blocked = req.state === "blocked";
+    const line = el("div", "jb-req" + (blocked ? " blocked" : ""), W(blocked ? "req_blocked" : req.state === "sending" ? "req_sending" : "req_requested"));
+    if (req.state === "requested") {
+      const x = el("button", "", W("cancel_request")); x.type = "button";
+      x.addEventListener("click", async () => { x.disabled = true; try { await db.collection("data/users/" + uid).doc("send-" + a._id).delete(); } catch (e) { x.disabled = false; } });
+      line.append(x);
+    }
+    return line;
+  }
+
+  function sortKey(a) { const dl = parseDate(a.deadline); const up = parseDate(a.last_update) || parseDate(a.applied_at); return [dl ? dl.getTime() : Infinity, -(Number(a.fit) || 0), -(up ? up.getTime() : 0)]; }
+  function cmp(x, y) { const a = sortKey(x), b = sortKey(y); for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1; } return 0; }
+
+  function renderStats() {
+    const box = $("jb-stats"); box.replaceChildren();
+    for (const key of ORDER) {
+      const st = status(key); const n = apps.filter((a) => a.status === key).length;
+      const s = el("div", "jb-stat"); s.id = "jb-stat-" + key;
+      const dot = el("span", "jb-dot"); dot.style.background = st.color;
+      s.append(dot, el("b", "", String(n)), el("span", "", st.label)); box.append(s);
+    }
+  }
+
+  function renderBoard() {
+    const board = $("jb-board"); board.replaceChildren();
+    if (!apps.length) { board.append(el("p", "jb-state", W("no_apps"))); renderStats(); return; }
+    for (const key of ORDER) {
+      const st = status(key);
+      const list = apps.filter((a) => a.status === key && matches(a)).sort(cmp);
+      const col = el("section", "jb-col"); col.id = "col-" + key;
+      const head = el("div", "jb-colhead"); const dot = el("span", "jb-dot"); dot.style.background = st.color;
+      head.append(dot, el("h2", "", st.label), el("span", "jb-count", String(list.length))); col.append(head);
+      if (st.hint) col.append(el("div", "jb-colhint", st.hint));
+      if (!list.length) col.append(el("div", "jb-empty", W("empty")));
+      for (const a of list) col.append(card(a, st));
+      board.append(col);
+    }
+    renderStats();
+  }
+
+  function renderMeta(m) {
+    lastCheckIso = (m && m.last_check) || null;
+    $("jb-last").textContent = lastCheckIso ? fmtDT(lastCheckIso) + " (" + ago(lastCheckIso) + ")" : W("never");
+    $("jb-nextcheck").textContent = (m && m.schedule) || "";
+    $("jb-summary").textContent = (m && m.summary) || "";
+  }
+
+  function renderLog(doc) {
+    const ol = $("jb-log"); ol.replaceChildren();
+    const ev = (doc && Array.isArray(doc.events) ? doc.events : []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 25);
+    $("jb-log-empty").hidden = ev.length > 0;
+    for (const e of ev) { const li = el("li"); const t = el("time", "", fmtDT(e.at)); t.dateTime = e.at || ""; li.append(t, el("span", "", e.text || "")); ol.append(li); }
+  }
+
+  function applyConfig(c) {
+    cfg = JSON.parse(JSON.stringify(DEFAULTS));
+    if (c) {
+      for (const k of ["title", "subtitle", "locale", "filters"]) if (c[k] != null) cfg[k] = c[k];
+      if (c.statuses) for (const k of Object.keys(c.statuses)) cfg.statuses[k] = Object.assign({}, cfg.statuses[k], c.statuses[k]);
+      if (c.words) Object.assign(cfg.words, c.words);
+      if (c.channel_labels) Object.assign(cfg.channel_labels, c.channel_labels);
+      if (c.cv_labels) Object.assign(cfg.cv_labels, c.cv_labels);
+      if (c.title) document.title = c.title;
+    }
+    renderShell(); renderBoard();
+    if (lastCheckIso !== undefined) renderMeta({ last_check: lastCheckIso, schedule: $("jb-nextcheck").textContent, summary: $("jb-summary").textContent });
+  }
+
+  renderShell(); renderStats();
+  setInterval(() => { if (lastCheckIso) $("jb-last").textContent = fmtDT(lastCheckIso) + " (" + ago(lastCheckIso) + ")"; }, 60000);
+
+  (async () => {
+    db = window.claude && typeof window.claude.use === "function" ? await window.claude.use("db") : null;
+    if (!db) { const s = $("jb-state"); if (s) s.textContent = W("no_db"); return; }
+    const user = await window.claude.use("user");
+    if (user) {
+      const me = await user.me();
+      uid = me.id;
+      canSend = !!uid && me.isOwner;
+      if (uid) {
+        db.collection("data/users/" + uid).onSnapshot((snap) => {
+          const next = {};
+          for (const d of snap.docs) { if (!d.exists) continue; const r = d.data(); if (r && r.app_id) next[r.app_id] = r; }
+          requests = next; renderBoard();
+        }, () => { canSend = false; renderBoard(); });
+      }
+    }
+    const onErr = () => { const s = $("jb-state"); if (s) s.textContent = W("load_error"); };
+    db.doc("meta/config").onSnapshot((snap) => applyConfig(snap.exists ? snap.data() : null), () => {});
+    db.collection("apps").onSnapshot((snap) => { apps = snap.docs.filter((d) => d.exists).map((d) => Object.assign({ _id: d.id }, d.data())); renderBoard(); }, onErr);
+    db.doc("meta/status").onSnapshot((snap) => renderMeta(snap.exists ? snap.data() : null), () => {});
+    db.doc("meta/log").onSnapshot((snap) => renderLog(snap.exists ? snap.data() : null), () => {});
+  })();
+})();
+</script>
