@@ -89,8 +89,12 @@ per application in play (letters ready → `queue`; blocked on the person → `w
 
 Follow references/sending.md. Show what goes out, get the OK for a named set ("send all ready", "send
 1, 3, 5"), then work channel by channel: email drafts sent after OK, career-site forms, LinkedIn Easy
-Apply. Ask the facts that are not in the CV (salary, years with a specific tool, GitHub…) once, in one
-batch, and keep them in `profile.json`. After every submission update the board row and the tracker.
+Apply. When a form asks something not in `profile.json` (salary, years with a specific tool, GitHub, a
+work-right detail, a site wanting to create an account), **ask it yourself, right away** — all open questions
+of the batch in one message, then continue the moment they answer; never leave a card silently waiting for the
+person to notice. Save every answer in `profile.json` `form_answers` so it is never asked twice, and mirror open
+questions on the board's "Questions for you" panel (references/sending.md, "Open questions"). After every
+submission update the board row and the tracker.
 
 The board is clickable too: the owner presses **Send** on a ready card, confirms, and that writes a private
 send request; you (in the chat when they say "отправь запрошенные", and the scheduled runs automatically)
@@ -109,8 +113,10 @@ From then on the person drives from the chat. Typical commands you should handle
 Offer it once the first applications are out. Ask for the schedule in the target country's time (default:
 weekdays hourly in working hours, weekends three times), convert to the computer's timezone, create the
 weekday and weekend tasks from the template in references/monitoring.md, and write the schedule sentence
-onto the board. Each run first sends what the owner requested with the board's Send button, then checks
-replies — so requests made in the evening go out in the target country's next working hour. Tell them the tasks run while the Claude app is open and when the crons need moving
+onto the board. Each run first picks up answers from the board's question panel and sends what the owner
+requested with the Send button, then checks replies — so requests made in the evening go out in the target
+country's next working hour. When a run meets a new question, it puts it on the board and pings the person once
+(push notification, or one email to their own address), so nothing waits unnoticed. Tell them the tasks run while the Claude app is open and when the crons need moving
 (daylight-saving changes, or when their computer switches to the new country's timezone).
 
 ## Ground rules

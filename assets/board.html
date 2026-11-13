@@ -75,6 +75,22 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
 .jb-req { font-size: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--accent); }
 .jb-req.blocked { color: var(--st-wait); }
 .jb-req button { font: inherit; font-size: 11px; color: var(--muted); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; }
+.jb-ask { background: var(--surface); border: 1px solid var(--st-wait); border-radius: 10px; padding: 14px 16px; display: grid; gap: 12px; }
+.jb-ask h2 { font-family: var(--font-display); font-size: 16px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.jb-ask .jb-ask-sub { color: var(--muted); font-size: 13px; margin: -6px 0 0; max-width: 70ch; }
+.jb-qs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px 20px; }
+.jb-q { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.jb-q label, .jb-q .jb-qtext { font-weight: 500; overflow-wrap: anywhere; }
+.jb-q .jb-for { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.jb-q .jb-done { font-size: 12px; color: var(--accent); }
+.jb-input { font: inherit; font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; }
+.jb-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.jb-yn { display: flex; flex-wrap: wrap; gap: 6px; }
+.jb-ask .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.jb-ask .row .jb-send { margin-left: 0; }
+.jb-ask-msg { font-size: 13px; color: var(--accent); }
+.jb-ask-msg.err { color: var(--st-reject); }
+.jb-qcount { font-size: 12px; color: var(--st-wait); }
 .jb-log { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; }
 .jb-log h2 { font-family: var(--font-display); font-size: 16px; margin: 0; }
 .jb-log ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -101,6 +117,16 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
       <span class="jb-summary" id="jb-summary"></span>
     </div>
   </header>
+  <section class="jb-ask" id="jb-ask" aria-labelledby="jb-ask-title" hidden>
+    <h2 id="jb-ask-title"><span class="jb-dot" style="background: var(--st-wait)"></span><span id="jb-ask-h">Questions for you</span></h2>
+    <p class="jb-ask-sub" id="jb-ask-sub"></p>
+    <div class="jb-qs" id="jb-qs"></div>
+    <div class="row">
+      <button type="button" class="jb-send" id="jb-ask-send"></button>
+      <button type="button" class="jb-send ghost" id="jb-ask-save"></button>
+      <span class="jb-ask-msg" id="jb-ask-msg" role="status"></span>
+    </div>
+  </section>
   <section class="jb-stats" id="jb-stats" aria-label="Summary"></section>
   <nav class="jb-filters" id="jb-filters" aria-label="Filter"></nav>
   <div class="jb-board-wrap"><div class="jb-board" id="jb-board"><p class="jb-state" id="jb-state">Loading applications…</p></div></div>
@@ -137,7 +163,12 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
       send_default: "your CV and the cover letter prepared for this job",
       req_requested: "Sending requested — the assistant sends it on its next run, or right away if you say so in the chat.",
       req_sending: "Sending now…", req_blocked: "Sending stopped — see Next.", req_done: "Sent.",
-      cancel_request: "Cancel request", send_error: "The request was not saved. Reload the page and try again." },
+      cancel_request: "Cancel request", send_error: "The request was not saved. Reload the page and try again.",
+      ask_title: "Questions for you", ask_sub: "Forms need these answers. Answer once — the answer is reused in every form that asks it, and only you can see it.",
+      ask_for: "needed for:", ask_answered: "answered", ask_send: "Save and send ({n})", ask_send_none: "Save answers",
+      ask_save: "Save only", ask_saved: "Saved. The assistant sends the completed applications on its next run, or right away if you say so in the chat.",
+      ask_saved_only: "Saved.", ask_error: "The answers were not saved. Reload the page and try again.",
+      ask_card: "{n} question(s) — answer them at the top", yes: "Yes", no: "No", choose: "Choose…" },
     channel_labels: { email: "Email", linkedin: "LinkedIn", lever: "Lever", ashby: "Ashby", greenhouse: "Greenhouse",
       workable: "Workable", teamtailor: "Teamtailor", breezy: "Breezy", smartrecruiters: "SmartRecruiters", workday: "Workday",
       yc: "YC", djinni: "Djinni", agency: "Agency", ats: "Company site" },
@@ -151,6 +182,9 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
   // Send requests live in the viewer's own private subtree data/users/<id>/send-<appId>: only the person who
   // clicked can write or read them, and the assistant (acting as the owner) reads data/users/me.
   let db = null, uid = null, canSend = false, requests = {}, confirming = null;
+  // Answers to form questions live next to the requests, in data/users/<id>/answers ({values: {key: value}}).
+  // `draft` keeps what the owner typed but has not saved, so live updates never wipe it.
+  let answers = {}, draft = {}, askSig = "";
   let filter = "all";
   try { filter = localStorage.getItem("jb-filter") || "all"; } catch (e) {}
   let lastCheckIso = null;
@@ -224,6 +258,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
     if (dates.childElementCount) c.append(dates);
     if (a.last_event) c.append(el("div", "jb-event", a.last_event));
     if (a.next_step) { const n = el("div", "jb-next"); n.append(el("b", "", W("next"))); n.append(document.createTextNode(a.next_step)); c.append(n); }
+    const open = openQuestions(a);
+    if (st.key === "waiting_you" && canSend && open.length) c.append(el("div", "jb-qcount", W("ask_card").replace("{n}", String(open.length))));
     const links = el("div", "jb-links");
     if (a.link && /^https:\/\//.test(a.link)) { const l = el("a", "", W("posting")); l.href = a.link; l.target = "_blank"; l.rel = "noopener"; links.append(l); }
     if (a.mail_link && /^https:\/\/mail\.google\.com\//.test(a.mail_link)) { const l = el("a", "", W("mail")); l.href = a.mail_link; l.target = "_blank"; l.rel = "noopener"; links.append(l); }
@@ -274,6 +310,106 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
     return line;
   }
 
+  // ---- Questions panel -------------------------------------------------------------------------
+  function questionsOf(a) { return Array.isArray(a.questions) ? a.questions.filter((q) => q && q.key && q.text) : []; }
+  function valueOf(key) { const d = draft[key]; return d != null ? String(d).trim() : (answers[key] != null ? String(answers[key]).trim() : ""); }
+  function openQuestions(a) { return questionsOf(a).filter((q) => !(answers[q.key] != null && String(answers[q.key]).trim())); }
+  function askGroups() {
+    const groups = new Map();
+    for (const a of apps) {
+      if (a.status !== "waiting_you") continue;
+      for (const q of questionsOf(a)) {
+        if (!groups.has(q.key)) groups.set(q.key, { q, apps: [] });
+        groups.get(q.key).apps.push(a);
+      }
+    }
+    return groups;
+  }
+  function sendable(values) {
+    return apps.filter((a) => a.status === "waiting_you" && a.letter_slug && questionsOf(a).length && !requests[a._id] &&
+      questionsOf(a).every((q) => values[q.key] != null && String(values[q.key]).trim()));
+  }
+  function mergedValues() {
+    const v = Object.assign({}, answers);
+    for (const k of Object.keys(draft)) { const t = String(draft[k]).trim(); if (t) v[k] = t; }
+    return v;
+  }
+  function updateAskButtons() {
+    const n = sendable(mergedValues()).length;
+    $("jb-ask-send").textContent = n ? W("ask_send").replace("{n}", String(n)) : W("ask_send_none");
+  }
+  function questionField(q) {
+    const box = el("div", "jb-q"); const id = "q-" + q.key.replace(/[^A-Za-z0-9_-]/g, "_");
+    const kind = q.kind || "text";
+    const current = valueOf(q.key);
+    const setDraft = (v) => { draft[q.key] = v; updateAskButtons(); };
+    if (kind === "yesno") {
+      box.append(el("div", "jb-qtext", q.text));
+      const yn = el("div", "jb-yn");
+      for (const [val, label] of [["yes", W("yes")], ["no", W("no")]]) {
+        const b = el("button", "jb-chipbtn", label); b.type = "button"; b.id = id + "-" + val;
+        b.setAttribute("aria-pressed", String(current === val));
+        b.addEventListener("click", () => { setDraft(val); for (const x of yn.children) x.setAttribute("aria-pressed", String(x === b)); });
+        yn.append(b);
+      }
+      box.append(yn);
+    } else if (kind === "choice" && Array.isArray(q.options) && q.options.length) {
+      const lab = el("label", "", q.text); lab.htmlFor = id; box.append(lab);
+      const s = el("select", "jb-input"); s.id = id;
+      s.append(Object.assign(el("option", "", W("choose")), { value: "" }));
+      for (const o of q.options) { const opt = el("option", "", String(o)); opt.value = String(o); if (String(o) === current) opt.selected = true; s.append(opt); }
+      s.addEventListener("change", () => setDraft(s.value));
+      box.append(s);
+    } else {
+      const lab = el("label", "", q.text); lab.htmlFor = id; box.append(lab);
+      const i = el("input", "jb-input"); i.id = id; i.type = "text"; i.value = current; i.autocomplete = "off";
+      if (q.placeholder) i.placeholder = q.placeholder;
+      i.addEventListener("input", () => setDraft(i.value));
+      box.append(i);
+    }
+    return box;
+  }
+  function renderAsk(force) {
+    const sec = $("jb-ask");
+    const groups = askGroups();
+    const sig = [...groups.keys()].join("|") + "#" + [...groups.values()].map((g) => g.apps.map((a) => a._id).join(",")).join(";") + "#" + Object.keys(answers).length;
+    if (!canSend || !groups.size) { sec.hidden = true; askSig = ""; return; }
+    sec.hidden = false;
+    $("jb-ask-h").textContent = W("ask_title") + " (" + groups.size + ")";
+    $("jb-ask-sub").textContent = W("ask_sub");
+    $("jb-ask-save").textContent = W("ask_save");
+    updateAskButtons();
+    if (!force && sig === askSig) return;   // same questions: keep the inputs (and focus) as they are
+    askSig = sig;
+    const box = $("jb-qs"); box.replaceChildren();
+    const sorted = [...groups.values()].sort((x, y) => Number(!!valueOf(x.q.key)) - Number(!!valueOf(y.q.key)));
+    for (const g of sorted) {
+      const f = questionField(g.q);
+      f.append(el("div", "jb-for", W("ask_for") + " " + g.apps.map((a) => a.company).join(", ")));
+      if (answers[g.q.key] != null && String(answers[g.q.key]).trim()) f.append(el("div", "jb-done", "✓ " + W("ask_answered")));
+      box.append(f);
+    }
+  }
+  async function saveAnswers(alsoSend) {
+    const msg = $("jb-ask-msg"); msg.className = "jb-ask-msg"; msg.textContent = "";
+    const values = mergedValues();
+    const btns = [$("jb-ask-send"), $("jb-ask-save")]; btns.forEach((b) => (b.disabled = true));
+    try {
+      await db.collection("data/users/" + uid).doc("answers").set({ values, updated_at: new Date().toISOString() });
+      answers = values; draft = {};
+      let sent = 0;
+      if (alsoSend) {
+        for (const a of sendable(values)) {
+          await db.collection("data/users/" + uid).doc("send-" + a._id).set({ app_id: a._id, requested_at: new Date().toISOString(), state: "requested", via: "answers" });
+          sent++;
+        }
+      }
+      msg.textContent = alsoSend && sent ? W("ask_saved") : W("ask_saved_only");
+    } catch (e) { msg.className = "jb-ask-msg err"; msg.textContent = W("ask_error"); }
+    btns.forEach((b) => (b.disabled = false));
+    renderAsk(true); renderBoard();
+  }
+
   function sortKey(a) { const dl = parseDate(a.deadline); const up = parseDate(a.last_update) || parseDate(a.applied_at); return [dl ? dl.getTime() : Infinity, -(Number(a.fit) || 0), -(up ? up.getTime() : 0)]; }
   function cmp(x, y) { const a = sortKey(x), b = sortKey(y); for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1; } return 0; }
 
@@ -289,6 +425,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
 
   function renderBoard() {
     const board = $("jb-board"); board.replaceChildren();
+    renderAsk(false);
     if (!apps.length) { board.append(el("p", "jb-state", W("no_apps"))); renderStats(); return; }
     for (const key of ORDER) {
       const st = status(key);
@@ -328,6 +465,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
       if (c.cv_labels) Object.assign(cfg.cv_labels, c.cv_labels);
       if (c.title) document.title = c.title;
     }
+    askSig = "";
     renderShell(); renderBoard();
     if (lastCheckIso !== undefined) renderMeta({ last_check: lastCheckIso, schedule: $("jb-nextcheck").textContent, summary: $("jb-summary").textContent });
   }
@@ -345,10 +483,16 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
       canSend = !!uid && me.isOwner;
       if (uid) {
         db.collection("data/users/" + uid).onSnapshot((snap) => {
-          const next = {};
-          for (const d of snap.docs) { if (!d.exists) continue; const r = d.data(); if (r && r.app_id) next[r.app_id] = r; }
-          requests = next; renderBoard();
+          const next = {}; let ans = {};
+          for (const d of snap.docs) {
+            if (!d.exists) continue; const r = d.data();
+            if (d.id === "answers") { ans = (r && r.values && typeof r.values === "object") ? r.values : {}; continue; }
+            if (r && r.app_id) next[r.app_id] = r;
+          }
+          requests = next; answers = ans; renderBoard();
         }, () => { canSend = false; renderBoard(); });
+        $("jb-ask-send").addEventListener("click", () => saveAnswers(true));
+        $("jb-ask-save").addEventListener("click", () => saveAnswers(false));
       }
     }
     const onErr = () => { const s = $("jb-state"); if (s) s.textContent = W("load_error"); };

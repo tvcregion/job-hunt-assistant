@@ -42,6 +42,7 @@ app, Claude Code connected to claude.ai). Without them, use the fallback at the 
 | mail_link | Gmail thread URL (https://mail.google.com/… only) |
 | send_summary | one line shown in the Send confirmation, in the person's language ("CV · site + letter, via LinkedIn Easy Apply") |
 | letter_slug, cv_file | which `letters.json` entry and which CV file belong to this application — the sender uses them |
+| questions | open form questions for a `waiting_you` card: `[{key, text, kind, options?, placeholder?}]` — see below |
 
 Status meanings: `waiting_you` = blocked on the person (an answer, an account, a document);
 `queue` = letter ready, waiting for their go; `applied` = sent, no human reply yet (automatic
@@ -95,6 +96,36 @@ The assistant reads the requests as the owner with `ArtifactData` `list` on coll
 (the board must declare `user` for `me` to resolve) and processes them as described in references/sending.md
 ("Send requests from the board"). Other viewers see a "copy command" button instead, which copies a chat
 command such as "Send the application: Acme — Site Foreman".
+
+## Questions for the person
+
+When a form asks something the person has not answered yet, the card carries the question in a structured
+form, and the board collects all open questions into one panel at the top, **"Questions for you"** (owner only):
+
+```json
+"questions": [
+  {"key": "expected_salary_monthly", "text": "Ожидаемая зарплата в месяц (сумма, валюта, брутто/нетто)", "placeholder": "напр. 150 000 THB брутто"},
+  {"key": "work_right_cyprus", "text": "Право работать на Кипре", "kind": "choice",
+   "options": ["По гражданству", "По разрешению без спонсора", "По разрешению со спонсором", "Нет"]},
+  {"key": "ok_michaelpage_account", "text": "Можно, чтобы сайт Michael Page создал тебе аккаунт MyPage?", "kind": "yesno"}
+]
+```
+
+- `key` is snake_case and **shared across cards**: the same question asked by five forms is one field in the
+  panel, answered once. Reuse the keys already in `profile.json` `form_answers` (`current_salary_monthly`,
+  `expected_salary_monthly`, `github_url`, `years_<tool>`, `work_right_<country>`, `needs_sponsorship_<country>`,
+  `notice_period`, `ok_<site>_account`, …).
+- `kind`: `text` (default), `choice` (with `options`), `yesno` (stored as "yes"/"no").
+- Write the question text in the person's language and say exactly what format the form needs (currency,
+  monthly vs yearly, gross vs net).
+- Things the person must do themselves (a CAPTCHA, a password, clicking an email link) stay in `next_step`,
+  not in `questions`.
+
+The panel shows every open question with "needed for: <companies>". "Save and send (n)" writes the answers to
+the owner's private `data/users/<owner>/answers` = `{values: {key: value}, updated_at}` and creates a send
+request for each card whose questions are now all answered; "Save only" just stores them. Answers never go
+into shared rows — salary and similar data stay private to the owner. When the card is sent, remove its
+`questions` field.
 
 ## Keeping it current
 
