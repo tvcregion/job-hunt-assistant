@@ -123,7 +123,8 @@ form, and the board collects all open questions into one panel at the top, **"Qu
 
 The panel shows every open question with "needed for: <companies>". "Save and send (n)" writes the answers to
 the owner's private `data/users/<owner>/answers` = `{values: {key: value}, updated_at}` and creates a send
-request for each card whose questions are now all answered; "Save only" just stores them. Answers never go
+request for each card whose questions are now all answered — including a card whose earlier request stopped as
+`blocked` (its request is replaced with a new `requested` one); "Save only" just stores them. Answers never go
 into shared rows — salary and similar data stay private to the owner. When the card is sent, remove its
 `questions` field.
 

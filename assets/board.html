@@ -326,7 +326,9 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); f
     return groups;
   }
   function sendable(values) {
-    return apps.filter((a) => a.status === "waiting_you" && a.letter_slug && questionsOf(a).length && !requests[a._id] &&
+    // A card can be (re)queued when it has no request yet, or its earlier request was stopped ("blocked") on questions.
+    const free = (a) => !requests[a._id] || requests[a._id].state === "blocked";
+    return apps.filter((a) => a.status === "waiting_you" && a.letter_slug && questionsOf(a).length && free(a) &&
       questionsOf(a).every((q) => values[q.key] != null && String(values[q.key]).trim()));
   }
   function mergedValues() {

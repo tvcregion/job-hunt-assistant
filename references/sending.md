@@ -42,7 +42,8 @@ Also put the questions on the board cards (below) in case they leave before answ
    not one per hour.
 3. On every later run, read `data/users/me/answers` first: copy new values into `profile.json` `form_answers`,
    then send every card whose questions are now answered (the panel's "Save and send" also creates send requests
-   for them). Remove the card's `questions` field once it is sent.
+   for them, replacing a `blocked` request with a new `requested` one). Remove the card's `questions` field once it
+   is sent.
 
 Answers live only in the owner's private subtree and the local `profile.json` — never in shared rows, letters,
 logs or public profiles.
